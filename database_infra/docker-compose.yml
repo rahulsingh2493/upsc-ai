@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: upsc_db_service
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-upsc_tutor_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      # Expose externally only if multi-host; keep bound to 127.0.0.1 or VPC IP for security
+      # - "${POSTGRES_BIND_IP:-0.0.0.0}:${POSTGRES_PORT:-5432}:5432"
+      - "5432:5432"
+    volumes:
+      - upsc_pgdata:/var/lib/postgresql/data
+      - ./config/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./init-scripts/01-init-extensions.sql:/docker-entrypoint-initdb.d/01-init-extensions.sql:ro
+      - ./init-scripts/02-init-tables.sql:/docker-entrypoint-initdb.d/02-init-tables.sql:ro
+      - ./init-scripts/03-init-indexes.sql:/docker-entrypoint-initdb.d/03-init-indexes.sql:ro
+      - ./seeds/01-upsc-syllabus-seed.sql:/docker-entrypoint-initdb.d/04-seed.sql:ro
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-upsc_tutor_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - upsc_infra_net
+
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: upsc_cache_service
+  #   restart: always
+  #   command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+  #   ports:
+  #     - "${REDIS_BIND_IP:-0.0.0.0}:${REDIS_PORT:-6379}:6379"
+  #   volumes:
+  #     - upsc_redisdata:/data
+  #     - ./config/redis.conf:/usr/local/etc/redis/redis.conf:ro
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - upsc_infra_net
+
+volumes:
+  upsc_pgdata:
+    name: upsc_production_pgdata
+  upsc_redisdata:
+    name: upsc_production_redisdata
+
+networks:
+  upsc_infra_net:
+    name: upsc_infra_network
+    driver: bridge
